@@ -2,11 +2,26 @@
 #include <Wire.h>
 
 int irqpin = 2;  // Digital 2
-boolean touchStates[12]; //to keep track of the previous touch states
+int resetButton = 11;
+int numOfLights = 8;
+int taserPin0 = A0;
+int taserPin1 = A1;
+int taserPin2 = A2;
+boolean touchStates[4]; //to keep track of the previous touch states
+boolean reset;
 
 void setup(){
   pinMode(irqpin, INPUT);
+  pinMode(resetButton, INPUT);
+    
+  for (int i = 3; i < 11; i++){
+    pinMode(i, OUTPUT);
+  }
   digitalWrite(irqpin, HIGH); //enable pullup resistor
+
+  pinMode(taserPin0, OUTPUT);
+  pinMode(taserPin1, OUTPUT);
+  pinMode(taserPin2, OUTPUT);
   
   Serial.begin(9600);
   Wire.begin();
@@ -15,11 +30,67 @@ void setup(){
 }
 
 void loop(){
-  readTouchInputs();
+
+  int buttonState = 0;
+  
+  buttonState = digitalRead(resetButton);
+  
+  if (buttonState == HIGH) {
+    numOfLights = 8;
+    Serial.println("Pressed");
+  }
+
+  
+  for (int i = 3; i < (numOfLights+ 3); i ++){
+    digitalWrite(i, HIGH);
+  }
+  
+    
+  boolean hit = readTouchInputs();
+    
+  if ( hit == true ){
+    shock(); 
+  }
+  
+  hit = false;
+  
+  for (int i = (numOfLights+3); i < 11; i++){
+    digitalWrite(i, LOW);
+  }
+  
+  if (numOfLights == 0){
+    boolean fin = false;
+    while (fin == false) {
+      for (int i = 3; i < 11; i++) {
+        digitalWrite(i, HIGH);
+      }
+      delay(300);
+      for (int i = 3; i < 11; i++){
+        digitalWrite(i, LOW);
+      }
+      delay(300);
+      buttonState = digitalRead(resetButton);
+      if (buttonState == HIGH) {
+        fin = true;
+        numOfLights = 8;
+      }
+    }
+  }
+}
+
+void shock(){
+  digitalWrite(taserPin0, HIGH);
+  digitalWrite(taserPin1, HIGH);
+  digitalWrite(taserPin2, HIGH);
+  delay(500);
+  digitalWrite(taserPin0, LOW);
+  digitalWrite(taserPin1, LOW);
+  digitalWrite(taserPin2, LOW);
 }
 
 
-void readTouchInputs(){
+boolean readTouchInputs(){
+  boolean hit;
   if(!checkInterrupt()){
     
     //read the touch state from the MPR121
@@ -31,35 +102,29 @@ void readTouchInputs(){
     uint16_t touched = ((MSB << 8) | LSB); //16bits that make up the touch states
 
     
-    for (int i=0; i < 12; i++){  // Check what electrodes were pressed
+    for (int i=0; i < 4; i++){  // Check what electrodes were pressed
       if(touched & (1<<i)){
       
         if(touchStates[i] == 0){
-          //pin i was just touched
-          Serial.print("pin ");
-          Serial.print(i);
-          Serial.println(" was just touched");
-        
-        }else if(touchStates[i] == 1){
-          //pin i is still being touched
-        }  
-      
-        touchStates[i] = 1;      
+           hit = true;
+           Serial.println("hit");
+           shock();
+           numOfLights = numOfLights - 1;
+           Serial.println(numOfLights);
+        }
+        touchStates[i] = 1; 
+        hit = false;    
       }else{
         if(touchStates[i] == 1){
-          Serial.print("pin ");
-          Serial.print(i);
-          Serial.println(" is no longer being touched");
-          
-          //pin i is no longer being touched
+          hit = false;
        }
-        
         touchStates[i] = 0;
       }
     
     }
     
   }
+  return hit;
 }
 
 
